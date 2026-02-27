@@ -3,8 +3,9 @@
 import asyncio
 import json
 import uuid
+from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -16,10 +17,14 @@ from nanobot.agent.tools.filesystem import ReadFileTool, WriteFileTool, EditFile
 from nanobot.agent.tools.shell import ExecTool
 from nanobot.agent.tools.web import WebSearchTool, WebFetchTool
 
+if TYPE_CHECKING:
+    from nanobot.config.schema import ExecToolConfig
+    from nanobot.cron.service import CronService
+
 
 class SubagentManager:
     """Manages background subagent execution."""
-    
+
     def __init__(
         self,
         provider: LLMProvider,
@@ -31,6 +36,8 @@ class SubagentManager:
         brave_api_key: str | None = None,
         exec_config: "ExecToolConfig | None" = None,
         restrict_to_workspace: bool = False,
+        cron_service: "CronService | None" = None,
+        mcp_servers: dict | None = None,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.provider = provider
@@ -42,6 +49,8 @@ class SubagentManager:
         self.brave_api_key = brave_api_key
         self.exec_config = exec_config or ExecToolConfig()
         self.restrict_to_workspace = restrict_to_workspace
+        self.cron_service = cron_service
+        self.mcp_servers = mcp_servers or {}
         self._running_tasks: dict[str, asyncio.Task[None]] = {}
         self._session_tasks: dict[str, set[str]] = {}  # session_key -> {task_id, ...}
     
@@ -87,7 +96,10 @@ class SubagentManager:
         """Execute the subagent task and announce the result."""
         logger.info("Subagent [{}] starting task: {}", task_id, label)
         
+        mcp_stack = AsyncExitStack()
         try:
+            await mcp_stack.__aenter__()
+
             # Build subagent tools (no message tool, no spawn tool)
             tools = ToolRegistry()
             allowed_dir = self.workspace if self.restrict_to_workspace else None
@@ -103,6 +115,19 @@ class SubagentManager:
             ))
             tools.register(WebSearchTool(api_key=self.brave_api_key))
             tools.register(WebFetchTool())
+
+            # Wire cron scheduling if available
+            if self.cron_service:
+                from nanobot.agent.tools.cron import CronTool
+                tools.register(CronTool(self.cron_service))
+
+            # Connect MCP servers if configured
+            if self.mcp_servers:
+                try:
+                    from nanobot.agent.tools.mcp import connect_mcp_servers
+                    await connect_mcp_servers(self.mcp_servers, tools, mcp_stack)
+                except Exception as e:
+                    logger.warning("Subagent [{}] MCP connect failed: {}", task_id, e)
             
             # Build messages with subagent-specific prompt
             system_prompt = self._build_subagent_prompt(task)
@@ -171,6 +196,11 @@ class SubagentManager:
             error_msg = f"Error: {str(e)}"
             logger.error("Subagent [{}] failed: {}", task_id, e)
             await self._announce_result(task_id, label, task, error_msg, origin, "error")
+        finally:
+            try:
+                await mcp_stack.aclose()
+            except Exception:
+                pass
     
     async def _announce_result(
         self,

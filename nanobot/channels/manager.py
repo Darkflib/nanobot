@@ -31,9 +31,19 @@ class ChannelManager:
         
         self._init_channels()
     
+    @staticmethod
+    def _warn_if_open(channel_name: str, cfg) -> None:
+        """Emit a prominent warning when allowFrom is empty (open to all users)."""
+        if not getattr(cfg, "allow_from", None):
+            logger.warning(
+                "SECURITY: {} channel has no allowFrom list — ALL users are accepted. "
+                "Add allowFrom in config to restrict access.",
+                channel_name,
+            )
+
     def _init_channels(self) -> None:
         """Initialize channels based on config."""
-        
+
         # Telegram channel
         if self.config.channels.telegram.enabled:
             try:
@@ -43,10 +53,11 @@ class ChannelManager:
                     self.bus,
                     groq_api_key=self.config.providers.groq.api_key,
                 )
+                self._warn_if_open("telegram", self.config.channels.telegram)
                 logger.info("Telegram channel enabled")
             except ImportError as e:
                 logger.warning("Telegram channel not available: {}", e)
-        
+
         # WhatsApp channel
         if self.config.channels.whatsapp.enabled:
             try:
@@ -54,6 +65,7 @@ class ChannelManager:
                 self.channels["whatsapp"] = WhatsAppChannel(
                     self.config.channels.whatsapp, self.bus
                 )
+                self._warn_if_open("whatsapp", self.config.channels.whatsapp)
                 logger.info("WhatsApp channel enabled")
             except ImportError as e:
                 logger.warning("WhatsApp channel not available: {}", e)
@@ -65,10 +77,11 @@ class ChannelManager:
                 self.channels["discord"] = DiscordChannel(
                     self.config.channels.discord, self.bus
                 )
+                self._warn_if_open("discord", self.config.channels.discord)
                 logger.info("Discord channel enabled")
             except ImportError as e:
                 logger.warning("Discord channel not available: {}", e)
-        
+
         # Feishu channel
         if self.config.channels.feishu.enabled:
             try:
@@ -76,6 +89,7 @@ class ChannelManager:
                 self.channels["feishu"] = FeishuChannel(
                     self.config.channels.feishu, self.bus
                 )
+                self._warn_if_open("feishu", self.config.channels.feishu)
                 logger.info("Feishu channel enabled")
             except ImportError as e:
                 logger.warning("Feishu channel not available: {}", e)
@@ -84,10 +98,10 @@ class ChannelManager:
         if self.config.channels.mochat.enabled:
             try:
                 from nanobot.channels.mochat import MochatChannel
-
                 self.channels["mochat"] = MochatChannel(
                     self.config.channels.mochat, self.bus
                 )
+                self._warn_if_open("mochat", self.config.channels.mochat)
                 logger.info("Mochat channel enabled")
             except ImportError as e:
                 logger.warning("Mochat channel not available: {}", e)
@@ -99,6 +113,7 @@ class ChannelManager:
                 self.channels["dingtalk"] = DingTalkChannel(
                     self.config.channels.dingtalk, self.bus
                 )
+                self._warn_if_open("dingtalk", self.config.channels.dingtalk)
                 logger.info("DingTalk channel enabled")
             except ImportError as e:
                 logger.warning("DingTalk channel not available: {}", e)
@@ -110,6 +125,7 @@ class ChannelManager:
                 self.channels["email"] = EmailChannel(
                     self.config.channels.email, self.bus
                 )
+                self._warn_if_open("email", self.config.channels.email)
                 logger.info("Email channel enabled")
             except ImportError as e:
                 logger.warning("Email channel not available: {}", e)
@@ -121,6 +137,7 @@ class ChannelManager:
                 self.channels["slack"] = SlackChannel(
                     self.config.channels.slack, self.bus
                 )
+                # Slack uses dm.allow_from / group_allow_from instead of allow_from
                 logger.info("Slack channel enabled")
             except ImportError as e:
                 logger.warning("Slack channel not available: {}", e)
@@ -133,10 +150,11 @@ class ChannelManager:
                     self.config.channels.qq,
                     self.bus,
                 )
+                self._warn_if_open("qq", self.config.channels.qq)
                 logger.info("QQ channel enabled")
             except ImportError as e:
                 logger.warning("QQ channel not available: {}", e)
-        
+
         # Matrix channel
         if self.config.channels.matrix.enabled:
             try:
@@ -145,6 +163,7 @@ class ChannelManager:
                     self.config.channels.matrix,
                     self.bus,
                 )
+                self._warn_if_open("matrix", self.config.channels.matrix)
                 logger.info("Matrix channel enabled")
             except ImportError as e:
                 logger.warning("Matrix channel not available: {}", e)

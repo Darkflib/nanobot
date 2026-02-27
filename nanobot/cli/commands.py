@@ -260,7 +260,13 @@ def gateway(
     if verbose:
         import logging
         logging.basicConfig(level=logging.DEBUG)
-    
+
+    if os.name != "nt" and os.getuid() == 0:
+        console.print(
+            "[bold red]WARNING:[/bold red] Running as root is strongly discouraged. "
+            "The exec tool can run shell commands — use a dedicated unprivileged user instead."
+        )
+
     console.print(f"{__logo__} Starting nanobot gateway on port {port}...")
     
     config = load_config()
@@ -743,16 +749,30 @@ def channels_login():
     console.print(f"{__logo__} Starting bridge...")
     console.print("Scan the QR code to connect.\n")
     
-    env = {**os.environ}
-    if config.channels.whatsapp.bridge_token:
-        env["BRIDGE_TOKEN"] = config.channels.whatsapp.bridge_token
-    
+    import stat
+    import tempfile
+
+    env = {k: v for k, v in os.environ.items() if k != "BRIDGE_TOKEN"}
+    token_file = None
     try:
+        if config.channels.whatsapp.bridge_token:
+            # Write token to a restricted temp file instead of passing it in the
+            # process environment (env vars are visible via `ps e` / /proc/<pid>/environ).
+            fd, token_path = tempfile.mkstemp(prefix="nb_bridge_", suffix=".tok")
+            token_file = token_path
+            os.chmod(token_path, stat.S_IRUSR | stat.S_IWUSR)  # 0600
+            with os.fdopen(fd, "w") as f:
+                f.write(config.channels.whatsapp.bridge_token)
+            env["BRIDGE_TOKEN_FILE"] = token_path
+
         subprocess.run(["npm", "start"], cwd=bridge_dir, check=True, env=env)
     except subprocess.CalledProcessError as e:
         console.print(f"[red]Bridge failed: {e}[/red]")
     except FileNotFoundError:
         console.print("[red]npm not found. Please install Node.js.[/red]")
+    finally:
+        if token_file and os.path.exists(token_file):
+            os.unlink(token_file)
 
 
 # ============================================================================
@@ -965,6 +985,83 @@ def cron_run(
             _print_agent_response(result_holder[0], render_markdown=True)
     else:
         console.print(f"[red]Failed to run job {job_id}[/red]")
+
+
+# ============================================================================
+# Sessions Commands
+# ============================================================================
+
+sessions_app = typer.Typer(help="Manage conversation sessions")
+app.add_typer(sessions_app, name="sessions")
+
+
+@sessions_app.command("list")
+def sessions_list():
+    """List all saved conversation sessions."""
+    from nanobot.config.loader import load_config
+    from nanobot.session.manager import SessionManager
+
+    config = load_config()
+    sm = SessionManager(config.workspace_path)
+    items = sm.list_sessions()
+    if not items:
+        console.print("[dim]No sessions found.[/dim]")
+        return
+    console.print(f"[bold]{len(items)} session(s)[/bold]\n")
+    for item in items:
+        updated = (item.get("updated_at") or "")[:16]
+        console.print(f"  {item['key']:<40} {updated}")
+
+
+@sessions_app.command("cleanup")
+def sessions_cleanup(
+    days: int = typer.Option(30, "--days", "-d", help="Delete sessions not updated in this many days"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be deleted without deleting"),
+):
+    """Delete session files that have not been updated in N days."""
+    import time
+    from nanobot.config.loader import load_config
+    from nanobot.session.manager import SessionManager
+    from datetime import datetime, timezone
+
+    config = load_config()
+    sm = SessionManager(config.workspace_path)
+    items = sm.list_sessions()
+    now = datetime.now(tz=timezone.utc)
+    cutoff_ts = time.time() - days * 86400
+    deleted = 0
+    skipped = 0
+
+    for item in items:
+        updated_str = item.get("updated_at") or ""
+        try:
+            updated = datetime.fromisoformat(updated_str.replace("Z", "+00:00"))
+            if updated.tzinfo is None:
+                updated = updated.replace(tzinfo=timezone.utc)
+            age_days = (now - updated).days
+        except (ValueError, AttributeError):
+            age_days = days + 1  # Treat unparseable dates as old
+
+        if age_days >= days:
+            path = item.get("path")
+            if path:
+                if dry_run:
+                    console.print(f"[dim]Would delete:[/dim] {item['key']} (last updated {age_days}d ago)")
+                else:
+                    try:
+                        import os
+                        os.remove(path)
+                        console.print(f"[red]Deleted:[/red] {item['key']} (last updated {age_days}d ago)")
+                        deleted += 1
+                    except Exception as e:
+                        console.print(f"[yellow]Warning:[/yellow] could not delete {path}: {e}")
+        else:
+            skipped += 1
+
+    if dry_run:
+        console.print(f"\n[dim]Dry run — no files deleted. Would have deleted {len(items) - skipped} session(s).[/dim]")
+    else:
+        console.print(f"\n[green]Done.[/green] Deleted {deleted} session(s), kept {skipped}.")
 
 
 # ============================================================================

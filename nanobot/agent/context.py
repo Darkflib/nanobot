@@ -54,10 +54,14 @@ Skills with available="false" need dependencies installed first - you can try in
     
     def _get_identity(self) -> str:
         """Get the core identity section."""
-        workspace_path = str(self.workspace.expanduser().resolve())
+        resolved = self.workspace.expanduser().resolve()
+        try:
+            workspace_path = "~/" + str(resolved.relative_to(Path.home()))
+        except ValueError:
+            workspace_path = str(resolved)
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
-        
+
         return f"""# nanobot 🐈
 
 You are nanobot, a helpful AI assistant.
