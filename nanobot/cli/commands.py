@@ -299,6 +299,7 @@ def gateway(
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
         kaizen_review_interval_days=config.agents.defaults.kaizen_review_interval_days,
+        vision_config=config.tools.vision,
     )
 
     # Set cron callback (needs agent)
@@ -458,6 +459,7 @@ def agent(
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
         kaizen_review_interval_days=config.agents.defaults.kaizen_review_interval_days,
+        vision_config=config.tools.vision,
     )
 
     # Show spinner when logs are off (no output to miss); skip when logs are on
@@ -965,6 +967,7 @@ def cron_run(
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
         kaizen_review_interval_days=config.agents.defaults.kaizen_review_interval_days,
+        vision_config=config.tools.vision,
     )
 
     store_path = get_data_dir() / "cron" / "jobs.json"

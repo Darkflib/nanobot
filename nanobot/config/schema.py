@@ -306,11 +306,20 @@ class MCPServerConfig(Base):
     tool_timeout: int = 30  # Seconds before a tool call is cancelled
 
 
+class VisionConfig(Base):
+    """Vision tool configuration."""
+
+    backend: str = "remote_llm"  # "remote_llm", "yolo", or "auto"
+    model: str = ""  # Vision model for remote_llm backend (empty = use agent default)
+    yolo_model: str = "yolo11n.pt"  # YOLO model name or path for yolo backend
+
+
 class ToolsConfig(Base):
     """Tools configuration."""
 
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
+    vision: VisionConfig = Field(default_factory=VisionConfig)
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
     mcp_servers: dict[str, MCPServerConfig] = Field(default_factory=dict)
 
