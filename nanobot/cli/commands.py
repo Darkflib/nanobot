@@ -251,6 +251,7 @@ def gateway(
     from nanobot.bus.queue import MessageBus
     from nanobot.channels.manager import ChannelManager
     from nanobot.config.loader import get_data_dir, load_config
+    from nanobot.cron.event_service import EventService
     from nanobot.cron.service import CronService
     from nanobot.cron.types import CronJob
     from nanobot.heartbeat.service import HeartbeatService
@@ -277,11 +278,13 @@ def gateway(
     provider = _make_provider(config)
     session_manager = SessionManager(config.workspace_path)
 
-    # Create cron service first (callback set after agent creation)
+    # Create cron and event services first (callbacks set after agent creation)
     cron_store_path = get_data_dir() / "cron" / "jobs.json"
     cron = CronService(cron_store_path)
+    event_store_path = get_data_dir() / "cron" / "events.json"
+    events = EventService(event_store_path, cron_service=cron)
 
-    # Create agent with cron service
+    # Create agent with cron and event services
     agent = AgentLoop(
         bus=bus,
         provider=provider,
@@ -294,6 +297,7 @@ def gateway(
         brave_api_key=config.tools.web.search.api_key or None,
         exec_config=config.tools.exec,
         cron_service=cron,
+        event_service=events,
         restrict_to_workspace=config.tools.restrict_to_workspace,
         session_manager=session_manager,
         mcp_servers=config.tools.mcp_servers,
@@ -425,6 +429,7 @@ def agent(
     from nanobot.agent.loop import AgentLoop
     from nanobot.bus.queue import MessageBus
     from nanobot.config.loader import get_data_dir, load_config
+    from nanobot.cron.event_service import EventService
     from nanobot.cron.service import CronService
 
     config = load_config()
@@ -433,9 +438,11 @@ def agent(
     bus = MessageBus()
     provider = _make_provider(config)
 
-    # Create cron service for tool usage (no callback needed for CLI unless running)
+    # Create cron and event services for tool usage
     cron_store_path = get_data_dir() / "cron" / "jobs.json"
     cron = CronService(cron_store_path)
+    event_store_path = get_data_dir() / "cron" / "events.json"
+    events = EventService(event_store_path, cron_service=cron)
 
     if logs:
         logger.enable("nanobot")
@@ -454,6 +461,7 @@ def agent(
         brave_api_key=config.tools.web.search.api_key or None,
         exec_config=config.tools.exec,
         cron_service=cron,
+        event_service=events,
         restrict_to_workspace=config.tools.restrict_to_workspace,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,

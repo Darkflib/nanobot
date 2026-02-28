@@ -1,7 +1,7 @@
 """Cron types."""
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, Optional
 
 
 @dataclass
@@ -57,3 +57,32 @@ class CronStore:
     """Persistent store for cron jobs."""
     version: int = 1
     jobs: list[CronJob] = field(default_factory=list)
+
+
+@dataclass
+class EventRecord:
+    """A calendar event stored in JSON-LD (schema.org/Event) format.
+
+    Separates rich calendar metadata from cron execution machinery.
+    When ``payload`` is set a linked ``CronJob`` is created automatically
+    and its id is kept in ``job_id`` so the two stay in sync.
+    """
+    id: str
+    name: str
+    start_ms: int                                               # schema.org: startDate
+    description: str = ""                                      # schema.org: description
+    end_ms: Optional[int] = None                               # schema.org: endDate
+    location: Optional[str] = None                             # schema.org: location
+    status: Literal["confirmed", "tentative", "cancelled"] = "confirmed"
+    # Execution linkage – populated when a CronJob backs this event
+    job_id: Optional[str] = None
+    payload: Optional[CronPayload] = None
+    created_at_ms: int = 0
+    updated_at_ms: int = 0
+
+
+@dataclass
+class EventStore:
+    """Persistent store for calendar events (JSON-LD serialised)."""
+    version: int = 1
+    events: list[EventRecord] = field(default_factory=list)
