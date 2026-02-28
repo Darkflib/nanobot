@@ -174,6 +174,14 @@ Connect nanobot to your favorite chat platform.
 | **Email** | IMAP/SMTP credentials |
 | **QQ** | App ID + App Secret |
 
+> [!TIP]
+> Every channel supports an optional **`model`** field to override the default model for that channel.
+> For example, to use a cheaper model on Telegram while keeping Claude for CLI:
+> ```json
+> { "channels": { "telegram": { "enabled": true, "token": "...", "model": "openrouter/google/gemini-flash-1.5" } } }
+> ```
+> Leave `model` empty (or omit it) to use the global `agents.defaults.model`.
+
 <details>
 <summary><b>Telegram</b> (Recommended)</summary>
 
@@ -892,6 +900,8 @@ MCP tools are automatically discovered and registered on startup. The LLM can us
 | `nanobot provider login openai-codex` | OAuth login for providers |
 | `nanobot channels login` | Link WhatsApp (scan QR) |
 | `nanobot channels status` | Show channel status |
+| `nanobot sessions list` | List saved conversation sessions |
+| `nanobot sessions cleanup --days N` | Delete sessions older than N days |
 
 Interactive mode exits: `exit`, `quit`, `/exit`, `/quit`, `:q`, or `Ctrl+D`.
 
@@ -909,6 +919,28 @@ nanobot cron list
 # Remove a job
 nanobot cron remove <job_id>
 ```
+
+</details>
+
+<details>
+<summary><b>Session Management</b></summary>
+
+Each conversation is stored as a JSONL file. Use these commands to inspect or clean up old sessions:
+
+```bash
+# List all saved sessions with their last-updated timestamp
+nanobot sessions list
+
+# Delete sessions not updated in the last 30 days (default)
+nanobot sessions cleanup
+
+# Delete sessions older than 7 days (preview first)
+nanobot sessions cleanup --days 7 --dry-run
+nanobot sessions cleanup --days 7
+```
+
+Sessions are keyed by `<channel>:<chat_id>` (e.g. `telegram:123456789`). Deleting a session file
+permanently removes its conversation history; long-term memory in `MEMORY.md` is unaffected.
 
 </details>
 
@@ -935,7 +967,7 @@ The agent can also manage this file itself — ask it to "add a periodic task" a
 ## 🐳 Docker
 
 > [!TIP]
-> The `-v ~/.nanobot:/root/.nanobot` flag mounts your local config directory into the container, so your config and workspace persist across container restarts.
+> The `-v ~/.nanobot:/home/nanobot/.nanobot` flag mounts your local config directory into the container, so your config and workspace persist across container restarts.
 
 ### Docker Compose
 
@@ -958,17 +990,17 @@ docker compose down                                      # stop
 docker build -t nanobot .
 
 # Initialize config (first time only)
-docker run -v ~/.nanobot:/root/.nanobot --rm nanobot onboard
+docker run -v ~/.nanobot:/home/nanobot/.nanobot --rm nanobot onboard
 
 # Edit config on host to add API keys
 vim ~/.nanobot/config.json
 
 # Run gateway (connects to enabled channels, e.g. Telegram/Discord/Mochat)
-docker run -v ~/.nanobot:/root/.nanobot -p 18790:18790 nanobot gateway
+docker run -v ~/.nanobot:/home/nanobot/.nanobot -p 18790:18790 nanobot gateway
 
 # Or run a single command
-docker run -v ~/.nanobot:/root/.nanobot --rm nanobot agent -m "Hello!"
-docker run -v ~/.nanobot:/root/.nanobot --rm nanobot status
+docker run -v ~/.nanobot:/home/nanobot/.nanobot --rm nanobot agent -m "Hello!"
+docker run -v ~/.nanobot:/home/nanobot/.nanobot --rm nanobot status
 ```
 
 ## 🐧 Linux Service
@@ -1187,6 +1219,50 @@ The raw session messages are preserved in the JSONL file — only the in-context
 
 </details>
 
+<details>
+<summary><b>Kaizen Continuous Improvement</b></summary>
+
+nanobot includes a self-improvement loop inspired by the kaizen philosophy. After every memory
+consolidation the agent automatically scans the conversation for patterns that could be
+automated, and saves them as candidates to a third memory file:
+
+| File | Purpose |
+|------|---------|
+| `~/.nanobot/workspace/memory/KAIZEN.md` | Automation candidates identified from conversations |
+
+**How it works:**
+
+1. **Scan (every consolidation)** — The LLM reviews the just-archived conversation and identifies
+   repeatable tasks (e.g. "fetch daily weather and summarise it", "check GitHub notifications").
+   Candidates are appended to `KAIZEN.md` with a timestamp.
+
+2. **Review (daily by default)** — When `KAIZEN.md` has content and the review interval has
+   elapsed, the LLM selects up to 3 high-priority candidates and autonomously creates the
+   corresponding skills or scripts in `~/.nanobot/workspace/skills/`.
+
+This loop runs entirely in the background. No user interaction is required.
+
+**Configuration** (`~/.nanobot/config.json`):
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "kaizen_review_interval_days": 1
+    }
+  }
+}
+```
+
+- `kaizen_review_interval_days` — days between reviews of `KAIZEN.md` (default `1`). Set to `0`
+  to review on every consolidation, or a larger value to review less frequently.
+
+> [!TIP]
+> Inspect `~/.nanobot/workspace/memory/KAIZEN.md` to see what the agent has flagged for automation.
+> Delete the file at any time to reset the candidate list.
+
+</details>
+
 ## 📁 Project Structure
 
 ```
@@ -1219,7 +1295,7 @@ PRs welcome! The codebase is intentionally small and readable. 🤗
 - [ ] **Long-term memory** — Never forget important context
 - [ ] **Better reasoning** — Multi-step planning and reflection
 - [ ] **More integrations** — Calendar and more
-- [ ] **Self-improvement** — Learn from feedback and mistakes
+- [x] **Self-improvement** — Kaizen loop: learns from conversations and automates repetitive tasks
 
 ### Contributors
 

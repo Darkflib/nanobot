@@ -11,6 +11,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Kaizen continuous improvement loop** — after every memory consolidation, the agent scans
+  the conversation for repeatable tasks that could be automated as scripts or skills and appends
+  candidates to `~/.nanobot/workspace/memory/KAIZEN.md`. On a configurable interval
+  (`agents.defaults.kaizen_review_interval_days`, default `1` day) the top candidates are
+  selected and the agent autonomously creates the corresponding skills or scripts in the
+  workspace. This self-improvement cycle requires no user interaction.
+
 - **Per-channel model routing** — each channel config (Telegram, Discord, WhatsApp, etc.) now
   accepts an optional `model` field. When set, that channel uses the specified model instead of
   the global `agents.defaults.model`. Useful for routing high-volume channels to a cheaper model
