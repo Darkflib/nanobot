@@ -14,7 +14,7 @@ Get USER_ID and CHANNEL from the current session (e.g., `8281248569` and `telegr
 
 ## Heartbeat Tasks
 
-`HEARTBEAT.md` is checked every 30 minutes. Use file tools to manage periodic tasks:
+`HEARTBEAT.md` is checked periodically (every 30 minutes by default). Use file tools to manage periodic tasks:
 
 - **Add**: `edit_file` to append new tasks
 - **Remove**: `edit_file` to delete completed tasks
