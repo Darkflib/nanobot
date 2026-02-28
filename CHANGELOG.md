@@ -99,12 +99,163 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.1.4] — 2025-xx-xx
+## [0.1.4.post2] — 2026-02-24
 
-_Initial public release with 11 channel integrations, multi-provider LLM support, MCP tool
-servers, cron scheduling, heartbeat service, and two-layer persistent memory._
+_Reliability-focused release with a redesigned heartbeat, prompt cache optimization, and
+hardened provider & channel stability._
+
+### Added
+
+- **Virtual tool-call heartbeat** — Heartbeat is now implemented as a virtual tool call,
+  improving reliability and observability of the wake-up cycle.
+
+### Changed
+
+- **Prompt cache optimization** — Reduced latency and cost by improving how the prompt cache
+  is populated and reused across turns.
+- **Provider & channel stability** — Hardened error handling and reconnection logic across
+  LLM providers and chat channel integrations.
+
+### Fixed
+
+- **Slack mrkdwn rendering** — Fixed incorrect markdown rendering in Slack messages.
+- **Slack thread isolation** — Slack replies now correctly stay within their originating thread.
+- **Discord typing indicator** — Fixed the typing indicator not clearing correctly in Discord.
 
 ---
 
-[Unreleased]: https://github.com/HKUDS/nanobot/compare/v0.1.4...HEAD
-[0.1.4]: https://github.com/HKUDS/nanobot/releases/tag/v0.1.4
+## [0.1.4.post1] — 2026-02-21
+
+_New providers, media support across channels, and major stability improvements._
+
+### Added
+
+- **Feishu multimodal files** — Feishu channel now receives images and other files sent by
+  users.
+- **Slack file sending** — The agent can now send files to users via the Slack channel.
+- **Discord long-message splitting** — Discord messages that exceed the character limit are
+  automatically split across multiple messages.
+- **VolcEngine provider** — Added VolcEngine (ByteDance) as a supported LLM provider.
+- **MCP custom auth headers** — MCP HTTP client now accepts custom authentication headers per
+  server configuration.
+- **Anthropic prompt caching** — Added support for Anthropic's prompt-caching API to reduce
+  cost on long system prompts.
+
+### Changed
+
+- **Memory reliability** — Background memory consolidation is more robust under concurrent
+  message load.
+
+### Fixed
+
+- **Subagents in CLI mode** — Subagents spawned via the `spawn` tool now function correctly
+  when running in CLI (`nanobot agent`) mode.
+
+---
+
+## [0.1.4] — 2026-02-17
+
+_MCP support, progress streaming, new providers, and multiple channel improvements._
+
+### Added
+
+- **MCP (Model Context Protocol)** — nanobot now supports MCP tool servers; tools are
+  auto-discovered and registered at startup alongside built-in tools.
+- **OpenAI Codex provider** — Added OpenAI Codex as a supported LLM provider with OAuth login
+  flow.
+- **ClawHub skill** — Integrated the ClawHub skill, allowing the agent to search and install
+  public agent skills from [clawhub.ai](https://clawhub.ai).
+
+---
+
+## [0.1.3.post7] — 2026-02-13
+
+_Security hardening and multiple improvements. Upgrade recommended to address security issues._
+
+### Added
+
+- **MiniMax provider** — Added MiniMax as a supported LLM provider.
+
+### Changed
+
+- **Memory system redesign** — Simplified and more reliable two-layer memory consolidation
+  with less code and fewer edge cases.
+- **CLI experience** — Enhanced command-line interface with improved output formatting and
+  usability.
+
+### Security
+
+- Multiple hardening improvements across providers and channels; see
+  [release notes](https://github.com/HKUDS/nanobot/releases/tag/v0.1.3.post7) for details.
+
+---
+
+## [0.1.3.post6] — 2026-02-10
+
+### Added
+
+- **Slack channel** — Added Slack as a supported chat platform.
+- **Email channel** — Added Email (IMAP/SMTP) as a supported chat platform.
+- **QQ channel** — Added QQ (QQ单聊) as a supported chat platform.
+
+### Changed
+
+- **Provider refactor** — Refactored the provider layer so that adding a new LLM provider
+  requires only 2 steps.
+
+---
+
+## [0.1.3.post5] — 2026-02-07
+
+_Qwen support and several key improvements._
+
+### Added
+
+- **Qwen provider** — Added Alibaba Cloud Qwen as a supported LLM provider.
+- **Moonshot/Kimi provider** — Added Moonshot (Kimi) as a supported LLM provider.
+- **Discord channel** — Added Discord as a supported chat platform.
+- **Feishu channel** — Added Feishu (飞书) as a supported chat platform.
+- **DeepSeek provider** — Added DeepSeek as a supported LLM provider.
+- **Scheduled tasks enhancements** — Improved natural language parsing and reliability for
+  periodic/cron task configuration.
+
+### Security
+
+- Enhanced security hardening across channel integrations.
+
+---
+
+## [0.1.3.post4] — 2026-02-04
+
+_Multi-provider & Docker support._
+
+### Added
+
+- **vLLM support** — Integrated vLLM for local LLM inference via the OpenAI-compatible API.
+- **Docker support** — Added Dockerfile and Docker Compose configuration for containerised
+  deployment.
+- **Multi-provider support** — Multiple LLM providers can now be configured and selected per
+  agent or channel.
+
+### Changed
+
+- **Natural language scheduling** — Improved natural language task scheduling reliability and
+  expression coverage.
+
+---
+
+## [0.1.3] — 2026-02-02
+
+_Initial public launch of nanobot._
+
+---
+
+[Unreleased]: https://github.com/HKUDS/nanobot/compare/v0.1.4.post2...HEAD
+[0.1.4.post2]: https://github.com/HKUDS/nanobot/compare/v0.1.4.post1...v0.1.4.post2
+[0.1.4.post1]: https://github.com/HKUDS/nanobot/compare/v0.1.4...v0.1.4.post1
+[0.1.4]: https://github.com/HKUDS/nanobot/compare/v0.1.3.post7...v0.1.4
+[0.1.3.post7]: https://github.com/HKUDS/nanobot/compare/v0.1.3.post6...v0.1.3.post7
+[0.1.3.post6]: https://github.com/HKUDS/nanobot/compare/v0.1.3.post5...v0.1.3.post6
+[0.1.3.post5]: https://github.com/HKUDS/nanobot/compare/v0.1.3.post4...v0.1.3.post5
+[0.1.3.post4]: https://github.com/HKUDS/nanobot/compare/v0.1.3...v0.1.3.post4
+[0.1.3]: https://github.com/HKUDS/nanobot/releases/tag/v0.1.3
