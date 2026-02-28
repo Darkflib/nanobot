@@ -60,11 +60,11 @@ async def connect_mcp_servers(
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
 
-    _CONNECT_TIMEOUT = 30  # seconds for the initial handshake / tool listing
+    _connect_timeout = 30  # seconds for the initial handshake / tool listing
 
     for name, cfg in mcp_servers.items():
         try:
-            async with asyncio.timeout(_CONNECT_TIMEOUT):
+            async with asyncio.timeout(_connect_timeout):
                 if cfg.command:
                     params = StdioServerParameters(
                         command=cfg.command, args=cfg.args, env=cfg.env or None
@@ -80,7 +80,7 @@ async def connect_mcp_servers(
                         httpx.AsyncClient(
                             headers=cfg.headers or None,
                             follow_redirects=True,
-                            timeout=httpx.Timeout(connect=_CONNECT_TIMEOUT, read=None),
+                            timeout=httpx.Timeout(connect=_connect_timeout, read=None, write=None, pool=None),
                         )
                     )
                     read, write, _ = await stack.enter_async_context(
@@ -101,6 +101,6 @@ async def connect_mcp_servers(
 
                 logger.info("MCP server '{}': connected, {} tools registered", name, len(tools.tools))
         except TimeoutError:
-            logger.error("MCP server '{}': connection timed out after {}s", name, _CONNECT_TIMEOUT)
+            logger.error("MCP server '{}': connection timed out after {}s", name, _connect_timeout)
         except Exception as e:
             logger.error("MCP server '{}': failed to connect: {}", name, e)
