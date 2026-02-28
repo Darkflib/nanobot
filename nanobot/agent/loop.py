@@ -76,6 +76,7 @@ class AgentLoop:
         session_manager: SessionManager | None = None,
         mcp_servers: dict | None = None,
         channels_config: ChannelsConfig | None = None,
+        kaizen_review_interval_days: int = 1,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.bus = bus
@@ -91,6 +92,7 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
+        self.kaizen_review_interval_days = kaizen_review_interval_days
 
         self.context = ContextBuilder(workspace)
         self.sessions = session_manager or SessionManager(workspace)
@@ -501,12 +503,44 @@ class AgentLoop:
             session.messages.append(entry)
         session.updated_at = datetime.now()
 
+    async def _run_kaizen_review(self, store: MemoryStore) -> None:
+        """Background task: review KAIZEN.md and spawn agent tasks to create skills/scripts."""
+        tasks = await store.kaizen_review(self.provider, self.model)
+        for task in tasks:
+            prompt = (
+                "A KAIZEN automation candidate has been selected for conversion. "
+                "Please create an appropriate skill or script for it and save it in "
+                "the workspace skills directory (skills/<name>/SKILL.md). "
+                "If a shell script is needed, save it alongside the skill file and "
+                "reference it from SKILL.md.\n\n"
+                f"Automation candidate:\n{task}"
+            )
+            _t: asyncio.Task = asyncio.create_task(
+                self.process_direct(prompt, session_key="kaizen:review", channel="system", chat_id="kaizen")
+            )
+            self._consolidation_tasks.add(_t)
+            _t.add_done_callback(self._consolidation_tasks.discard)
+            _t.add_done_callback(
+                lambda t: logger.error("Kaizen process task failed: {}", t.exception())
+                if not t.cancelled() and t.exception() else None
+            )
+
     async def _consolidate_memory(self, session, archive_all: bool = False) -> bool:
         """Delegate to MemoryStore.consolidate(). Returns True on success."""
-        return await MemoryStore(self.workspace).consolidate(
+        store = MemoryStore(self.workspace)
+        success = await store.consolidate(
             session, self.provider, self.model,
             archive_all=archive_all, memory_window=self.memory_window,
         )
+        if success and not archive_all and store.should_run_kaizen_review(self.kaizen_review_interval_days):
+            _t: asyncio.Task = asyncio.create_task(self._run_kaizen_review(store))
+            self._consolidation_tasks.add(_t)
+            _t.add_done_callback(self._consolidation_tasks.discard)
+            _t.add_done_callback(
+                lambda t: logger.error("Kaizen review task failed: {}", t.exception())
+                if not t.cancelled() and t.exception() else None
+            )
+        return success
 
     async def process_direct(
         self,

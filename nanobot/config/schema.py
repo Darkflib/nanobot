@@ -221,6 +221,7 @@ class AgentDefaults(Base):
     temperature: float = 0.1
     max_tool_iterations: int = 40
     memory_window: int = 100
+    kaizen_review_interval_days: int = 1  # How often (in days) to review KAIZEN.md and pick tasks to automate
 
 
 class AgentsConfig(Base):

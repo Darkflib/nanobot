@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -42,6 +43,64 @@ _SAVE_MEMORY_TOOL = [
 ]
 
 
+_KAIZEN_SCAN_TOOL = [
+    {
+        "type": "function",
+        "function": {
+            "name": "save_kaizen_candidates",
+            "description": (
+                "Save task automation candidates identified in the conversation to KAIZEN.md. "
+                "Call with an empty list if no candidates are found."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "candidates": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Descriptions of repeatable tasks that could be automated as "
+                            "scripts or skills to reduce token usage, prevent failures, "
+                            "and speed up future runs. Empty list if none found."
+                        ),
+                    }
+                },
+                "required": ["candidates"],
+            },
+        },
+    }
+]
+
+
+_KAIZEN_REVIEW_TOOL = [
+    {
+        "type": "function",
+        "function": {
+            "name": "select_kaizen_tasks",
+            "description": (
+                "Select up to 3 highest-priority automation candidates from KAIZEN.md "
+                "to convert into skills or scripts."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "selected_tasks": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Up to 3 task descriptions to convert into skills or scripts, "
+                            "ordered by expected impact (most impactful first)."
+                        ),
+                        "maxItems": 3,
+                    }
+                },
+                "required": ["selected_tasks"],
+            },
+        },
+    }
+]
+
+
 class MemoryStore:
     """Two-layer memory: MEMORY.md (long-term facts) + HISTORY.md (grep-searchable log)."""
 
@@ -49,6 +108,8 @@ class MemoryStore:
         self.memory_dir = ensure_dir(workspace / "memory")
         self.memory_file = self.memory_dir / "MEMORY.md"
         self.history_file = self.memory_dir / "HISTORY.md"
+        self.kaizen_file = self.memory_dir / "KAIZEN.md"
+        self._kaizen_last_review_file = self.memory_dir / ".kaizen_last_review"
 
     def read_long_term(self) -> str:
         if self.memory_file.exists():
@@ -65,6 +126,162 @@ class MemoryStore:
     def get_memory_context(self) -> str:
         long_term = self.read_long_term()
         return f"## Long-term Memory\n{long_term}" if long_term else ""
+
+    # ------------------------------------------------------------------
+    # Kaizen helpers
+    # ------------------------------------------------------------------
+
+    def read_kaizen(self) -> str:
+        """Return the current contents of KAIZEN.md (empty string if absent)."""
+        if self.kaizen_file.exists():
+            return self.kaizen_file.read_text(encoding="utf-8")
+        return ""
+
+    def append_kaizen(self, candidates: list[str]) -> None:
+        """Append automation candidates to KAIZEN.md with a timestamp header."""
+        if not candidates:
+            return
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        lines = [f"\n## {timestamp}\n"]
+        for c in candidates:
+            lines.append(f"- {c}")
+        with open(self.kaizen_file, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+
+    def should_run_kaizen_review(self, interval_days: int) -> bool:
+        """Return True when KAIZEN.md exists and the review interval has elapsed."""
+        if not self.kaizen_file.exists() or not self.read_kaizen().strip():
+            return False
+        if not self._kaizen_last_review_file.exists():
+            return True
+        try:
+            last = datetime.fromisoformat(
+                self._kaizen_last_review_file.read_text(encoding="utf-8").strip()
+            )
+            return datetime.now() - last >= timedelta(days=interval_days)
+        except (ValueError, OSError):
+            return True
+
+    def _update_kaizen_last_review(self) -> None:
+        self._kaizen_last_review_file.write_text(
+            datetime.now().isoformat(), encoding="utf-8"
+        )
+
+    async def kaizen_scan(
+        self,
+        provider: LLMProvider,
+        model: str,
+        conversation_lines: list[str],
+    ) -> bool:
+        """Scan a conversation for scriptable task candidates and append them to KAIZEN.md.
+
+        Returns True on success (including no candidates found), False on failure.
+        """
+        if not conversation_lines:
+            return True
+
+        prompt = (
+            "Review this conversation and identify any repeatable tasks that could be "
+            "automated as scripts or skills to reduce token usage, prevent failures, "
+            "and speed up future runs. Call save_kaizen_candidates with your findings "
+            "(use an empty list if nothing qualifies).\n\n"
+            "## Conversation\n"
+            + "\n".join(conversation_lines)
+        )
+        try:
+            response = await provider.chat(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a process improvement agent. "
+                            "Call save_kaizen_candidates with any automation candidates found."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                tools=_KAIZEN_SCAN_TOOL,
+                model=model,
+            )
+
+            if not response.has_tool_calls:
+                logger.debug("Kaizen scan: LLM did not call save_kaizen_candidates, skipping")
+                return True
+
+            args = response.tool_calls[0].arguments
+            if isinstance(args, str):
+                args = json.loads(args)
+            if not isinstance(args, dict):
+                return True
+
+            candidates = args.get("candidates", [])
+            if isinstance(candidates, list) and candidates:
+                self.append_kaizen([str(c) for c in candidates if c])
+                logger.info("Kaizen scan: {} candidate(s) added to KAIZEN.md", len(candidates))
+            return True
+        except Exception:
+            logger.exception("Kaizen scan failed")
+            return False
+
+    async def kaizen_review(
+        self,
+        provider: LLMProvider,
+        model: str,
+    ) -> list[str]:
+        """Review KAIZEN.md and return up to 3 top-priority task descriptions to automate.
+
+        Records the review timestamp so the caller can enforce the daily interval.
+        Returns an empty list when KAIZEN.md is empty or the LLM finds nothing to select.
+        """
+        kaizen_content = self.read_kaizen()
+        if not kaizen_content.strip():
+            return []
+
+        prompt = (
+            "Review the following automation candidates from KAIZEN.md and select up to 3 "
+            "that would provide the most value as skills or scripts (most tokens saved, "
+            "highest reliability improvement, most reuse). "
+            "Call select_kaizen_tasks with your selection.\n\n"
+            f"## KAIZEN.md\n{kaizen_content}"
+        )
+        try:
+            response = await provider.chat(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a process improvement agent. "
+                            "Call select_kaizen_tasks with the top candidates to automate."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                tools=_KAIZEN_REVIEW_TOOL,
+                model=model,
+            )
+
+            if not response.has_tool_calls:
+                logger.debug("Kaizen review: LLM did not call select_kaizen_tasks")
+                self._update_kaizen_last_review()
+                return []
+
+            args = response.tool_calls[0].arguments
+            if isinstance(args, str):
+                args = json.loads(args)
+            if not isinstance(args, dict):
+                return []
+
+            selected = args.get("selected_tasks", [])
+            tasks: list[str] = []
+            if isinstance(selected, list):
+                tasks = [str(t) for t in selected if t][:3]
+
+            self._update_kaizen_last_review()
+            logger.info("Kaizen review: {} task(s) selected for conversion", len(tasks))
+            return tasks
+        except Exception:
+            logger.exception("Kaizen review failed")
+            return []
 
     async def consolidate(
         self,
@@ -144,6 +361,10 @@ class MemoryStore:
 
             session.last_consolidated = 0 if archive_all else len(session.messages) - keep_count
             logger.info("Memory consolidation done: {} messages, last_consolidated={}", len(session.messages), session.last_consolidated)
+
+            if not archive_all and lines:
+                await self.kaizen_scan(provider, model, lines)
+
             return True
         except Exception:
             logger.exception("Memory consolidation failed")
