@@ -136,7 +136,28 @@ class ChannelManager:
                 self.channels["slack"] = SlackChannel(
                     self.config.channels.slack, self.bus
                 )
-                # Slack uses dm.allow_from / group_allow_from instead of allow_from
+                slack_cfg = self.config.channels.slack
+                if slack_cfg.dm.policy == "open":
+                    logger.warning(
+                        "SECURITY: slack channel DMs are open to ALL users (dm.policy='open'). "
+                        "Set dm.policy='allowlist' and add dm.allowFrom to restrict access."
+                    )
+                elif slack_cfg.dm.policy == "allowlist" and not slack_cfg.dm.allow_from:
+                    logger.warning(
+                        "SECURITY: slack channel dm.policy='allowlist' but dm.allowFrom is empty — "
+                        "ALL users are accepted. Add dm.allowFrom to restrict access."
+                    )
+                if slack_cfg.group_policy == "open":
+                    logger.warning(
+                        "SECURITY: slack channel group messages are open to ALL channels/users "
+                        "(groupPolicy='open'). Set groupPolicy='allowlist' and add groupAllowFrom "
+                        "to restrict access."
+                    )
+                elif slack_cfg.group_policy == "allowlist" and not slack_cfg.group_allow_from:
+                    logger.warning(
+                        "SECURITY: slack channel groupPolicy='allowlist' but groupAllowFrom is empty — "
+                        "ALL channels are accepted. Add groupAllowFrom to restrict access."
+                    )
                 logger.info("Slack channel enabled")
             except ImportError as e:
                 logger.warning("Slack channel not available: {}", e)

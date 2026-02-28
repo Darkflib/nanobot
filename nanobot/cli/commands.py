@@ -262,9 +262,12 @@ def gateway(
 
     if os.name != "nt" and os.getuid() == 0:
         console.print(
-            "[bold red]WARNING:[/bold red] Running as root is strongly discouraged. "
-            "The exec tool can run shell commands — use a dedicated unprivileged user instead."
+            "[bold red]ERROR:[/bold red] Refusing to start as root. "
+            "The exec tool can run shell commands — use a dedicated unprivileged user instead. "
+            "Set NANOBOT_ALLOW_ROOT=1 to override."
         )
+        if not os.environ.get("NANOBOT_ALLOW_ROOT"):
+            raise SystemExit(1)
 
     console.print(f"{__logo__} Starting nanobot gateway on port {port}...")
 
