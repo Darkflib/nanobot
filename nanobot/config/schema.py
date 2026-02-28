@@ -194,6 +194,21 @@ class QQConfig(Base):
     allow_from: list[str] = Field(default_factory=list)  # Allowed user openids (empty = public access)
     model: str = ""  # Per-channel model override; empty = use agent default
 
+
+class RabbitMQConfig(Base):
+    """RabbitMQ channel configuration."""
+
+    enabled: bool = False
+    url: str = "amqp://guest:guest@localhost/"  # AMQP connection URL
+    queue: str = ""  # Queue to consume inbound messages from
+    exchange: str = ""  # Exchange for outbound messages (empty = default exchange)
+    routing_key: str = ""  # Default routing key for outbound messages when no reply_to is set
+    prefetch_count: int = 1  # Number of messages to prefetch
+    queue_declare: bool = True  # If True, declare (create) the queue on startup; set False to require it to exist already
+    allow_from: list[str] = Field(default_factory=list)  # Allowed sender IDs (matched against app_id)
+    model: str = ""  # Per-channel model override; empty = use agent default
+
+
 class ChannelsConfig(Base):
     """Configuration for chat channels."""
 
@@ -209,6 +224,7 @@ class ChannelsConfig(Base):
     slack: SlackConfig = Field(default_factory=SlackConfig)
     qq: QQConfig = Field(default_factory=QQConfig)
     matrix: MatrixConfig = Field(default_factory=MatrixConfig)
+    rabbitmq: RabbitMQConfig = Field(default_factory=RabbitMQConfig)
 
 
 class AgentDefaults(Base):

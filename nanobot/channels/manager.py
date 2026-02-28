@@ -188,6 +188,19 @@ class ChannelManager:
             except ImportError as e:
                 logger.warning("Matrix channel not available: {}", e)
 
+        # RabbitMQ channel
+        if self.config.channels.rabbitmq.enabled:
+            try:
+                from nanobot.channels.rabbitmq import RabbitMQChannel
+                self.channels["rabbitmq"] = RabbitMQChannel(
+                    self.config.channels.rabbitmq,
+                    self.bus,
+                )
+                self._warn_if_open("rabbitmq", self.config.channels.rabbitmq)
+                logger.info("RabbitMQ channel enabled")
+            except ImportError as e:
+                logger.warning("RabbitMQ channel not available: {}", e)
+
     async def _start_channel(self, name: str, channel: BaseChannel) -> None:
         """Start a channel and log any exceptions."""
         try:
