@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+from nanobot.config.schema import HeartbeatConfig
 from nanobot.heartbeat.service import HeartbeatService
 from nanobot.providers.base import LLMResponse, ToolCallRequest
 
@@ -115,3 +116,24 @@ async def test_trigger_now_returns_none_when_decision_is_skip(tmp_path) -> None:
     )
 
     assert await service.trigger_now() is None
+
+
+def test_heartbeat_config_default_interval() -> None:
+    cfg = HeartbeatConfig()
+    assert cfg.interval_s == 30 * 60
+    assert cfg.enabled is True
+
+
+def test_heartbeat_config_custom_interval_snake_case() -> None:
+    cfg = HeartbeatConfig.model_validate({"interval_s": 600})
+    assert cfg.interval_s == 600
+
+
+def test_heartbeat_config_custom_interval_camel_case() -> None:
+    cfg = HeartbeatConfig.model_validate({"intervalS": 300})
+    assert cfg.interval_s == 300
+
+
+def test_heartbeat_config_disable() -> None:
+    cfg = HeartbeatConfig.model_validate({"enabled": False})
+    assert cfg.enabled is False

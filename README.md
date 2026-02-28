@@ -915,7 +915,7 @@ nanobot cron remove <job_id>
 <details>
 <summary><b>Heartbeat (Periodic Tasks)</b></summary>
 
-The gateway wakes up every 30 minutes and checks `HEARTBEAT.md` in your workspace (`~/.nanobot/workspace/HEARTBEAT.md`). If the file has tasks, the agent executes them and delivers results to your most recently active chat channel.
+The gateway wakes up every 30 minutes (configurable) and checks `HEARTBEAT.md` in your workspace (`~/.nanobot/workspace/HEARTBEAT.md`). If the file has tasks, the agent executes them and delivers results to your most recently active chat channel.
 
 **Setup:** edit `~/.nanobot/workspace/HEARTBEAT.md` (created automatically by `nanobot onboard`):
 
@@ -1124,7 +1124,7 @@ Sessions are never automatically deleted. To start fresh: send `/new` to the age
 <details>
 <summary><b>Heartbeat (Two-Phase Wake-Up)</b></summary>
 
-`nanobot gateway` wakes up every 30 minutes and checks `~/.nanobot/workspace/HEARTBEAT.md` for active tasks. The process is:
+`nanobot gateway` wakes up periodically (every 30 minutes by default) and checks `~/.nanobot/workspace/HEARTBEAT.md` for active tasks. The process is:
 
 **Phase 1 — Decision (cheap LLM call):**
 - The LLM reads `HEARTBEAT.md` and calls a virtual `heartbeat` tool with `action: "skip"` or `action: "run"`.
@@ -1151,7 +1151,21 @@ Unchecked `- [ ]` items are considered active. The agent can check items off as 
 
 **Configuration:**
 
-The heartbeat interval is 30 minutes by default. It is not currently configurable in `config.json` (planned for a future release). To disable: set `"heartbeat": {"enabled": false}` in your agent config (if supported by your version), or delete/empty `HEARTBEAT.md`.
+The heartbeat interval is 30 minutes by default. Configure it in `~/.nanobot/config.json` under `gateway.heartbeat`:
+
+```json
+{
+  "gateway": {
+    "heartbeat": {
+      "enabled": true,
+      "intervalS": 1800
+    }
+  }
+}
+```
+
+- `enabled` — set to `false` to disable the heartbeat entirely (or delete/empty `HEARTBEAT.md`).
+- `intervalS` — interval in seconds between heartbeat checks (default: `1800` = 30 minutes).
 
 </details>
 
